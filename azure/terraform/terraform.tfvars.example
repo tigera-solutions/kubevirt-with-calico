@@ -1,0 +1,20 @@
+ssh_key_path          = "~/.ssh/rsa_id"
+azure_subscription_id = "REPLACE_WITH_YOUR_SUBSCRIPTION_ID"
+tenant_id             = "REPLACE_WITH_YOUR_TENANT_ID"
+resourcegroup         = "unmngd-kubeadm"
+location              = "westus2"
+prefix                = "kvirt"
+master_vm_name        = ["master"]
+worker_vm_name        = ["worker1", "worker2"]
+# image                 = {
+#   # Centos 8
+#   publisher = "OpenLogic"
+#   offer     = "CentOS"
+#   sku       = "8_5"
+#   version   = "latest"
+#   # Ubuntu 22.04
+#   publisher = "Canonical"
+#   offer     = "0001-com-ubuntu-server-jammy"
+#   sku       = "22_04-lts"
+#   version   = "22.04.202403280"
+# }

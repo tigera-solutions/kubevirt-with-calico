@@ -1,0 +1,4 @@
+---
+# vars applicable to all roles
+
+k8s_repo: 1.28

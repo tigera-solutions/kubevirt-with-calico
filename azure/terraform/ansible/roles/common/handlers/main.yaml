@@ -1,0 +1,7 @@
+---
+# Handlers for common notifications
+
+- name: restart containerd
+  service:
+    name: containerd.service
+    state: restarted

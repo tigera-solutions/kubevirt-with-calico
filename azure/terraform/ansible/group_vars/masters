@@ -1,0 +1,4 @@
+---
+# vars applicable to master role
+
+# k8s_version: 1.28.9

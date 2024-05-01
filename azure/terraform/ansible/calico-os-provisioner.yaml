@@ -1,0 +1,58 @@
+---
+- hosts: masters
+  become: false
+  vars:
+    calico_version: "v3.27.3"
+    enable_ipip: false
+    pod_cidr: "10.244.0.0/16"
+  tasks:
+
+  - name: Ensure $HOME/calico dir
+    file:
+      path: $HOME/calico
+      state: directory
+    tags:
+    - copy_config
+
+  - name: Download Calico operator file
+    get_url:
+      url: https://raw.githubusercontent.com/projectcalico/calico/{{ calico_version }}/manifests/tigera-operator.yaml
+      dest: $HOME/calico/tigera-operator.yaml
+      mode: 0600
+    tags:
+    - copy_config
+
+  - name: Download Calico custom-resources file
+    get_url:
+      url: https://raw.githubusercontent.com/projectcalico/calico/{{ calico_version }}/manifests/custom-resources.yaml
+      dest: $HOME/calico/custom-resources.yaml
+      mode: 0600
+    tags:
+    - copy_config
+
+  - name: Set VXLAN encapsulation and adjust network configuration
+    shell: |
+      # when using Azure, make sure to configure VXLAN networking as IPIP is not supported on Azure
+      sed -i 's?cidr:.*$?cidr: {{ pod_cidr }}?1; s/encapsulation:.*$/encapsulation: VXLAN/1' $HOME/calico/custom-resources.yaml
+    become: false
+    tags:
+    - copy_config
+
+  - name: Set IPIP encapsulation and adjust network configuration
+    shell: |
+      # if infrastructure networking supports it, use IPIPCrossSubnet over IPIP for better performance
+      sed -i 's?cidr:.*$?cidr: {{ pod_cidr }}?1; s/encapsulation:.*$/encapsulation: IPIP/1' $HOME/calico/custom-resources.yaml
+    become: false
+    when: enable_ipip|default(false)|bool
+    tags:
+    - copy_config
+
+  - name: Install calico
+    shell: |
+      kubectl create -f $HOME/calico/tigera-operator.yaml
+      kubectl apply -f $HOME/calico/custom-resources.yaml
+    #changedthis
+    #when: installcalico is defined
+    become: false
+    tags:
+    - install_calico

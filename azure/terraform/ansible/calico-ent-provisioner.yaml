@@ -1,0 +1,190 @@
+---
+- hosts: masters
+  become: false
+  vars:
+    ce_version: "v3.18.2"
+    networking: aks-calico-cni # acceptable values: aks-azure-cni, aks-calico-cni, eks, eks-calico-cni, none
+    cluster_type: kubeadm #acceptable values: aks, eks, kubeadm
+    #network_mode: VXLAN #acceptable values: VXLAN, VXLANCrossSubnet, IPIP, IPIPCrossSubnet, None
+    storage_type: classic #acceptable values: classic, csi
+    pod_cidr: "10.244.0.0/16"
+  tasks:
+
+  - name: Get resources download URL for AKS with Azure CNI
+    set_fact:
+      cr_dowload_url: "https://downloads.tigera.io/ee/{{ ce_version }}/manifests/aks/custom-resources.yaml"
+    when: networking == 'aks-azure-cni'
+
+  - name: Get resources download URL for Azure with Calico CNI
+    set_fact:
+      cr_dowload_url: "https://downloads.tigera.io/ee/{{ ce_version }}/manifests/aks/custom-resources-calico-cni.yaml"
+    when: networking == 'aks-calico-cni'
+
+  - name: Get resources download URL for EKS
+    set_fact:
+      cr_dowload_url: "https://downloads.tigera.io/ee/{{ ce_version }}/manifests/eks/custom-resources.yaml"
+    when: networking == 'eks'
+
+  - name: Get resources download URL for EKS with Calico CNI
+    set_fact:
+      cr_dowload_url: "https://downloads.tigera.io/ee/{{ ce_version }}/manifests/eks/custom-resources-calico-cni.yaml"
+    when: networking == 'eks-calico-cni'
+
+  - name: Get resources download URL for on-prem
+    set_fact:
+      cr_dowload_url: "https://downloads.tigera.io/ee/{{ ce_version }}/manifests/custom-resources.yaml"
+    when: networking == 'none'
+
+  - name: Ensure $HOME/calico dir
+    ansible.builtin.file:
+      path: $HOME/calico
+      state: directory
+
+  - name: Download Calico Enterprise operator file
+    get_url:
+      url: https://downloads.tigera.io/ee/{{ ce_version }}/manifests/tigera-operator.yaml
+      dest: $HOME/calico/tigera-operator.yaml
+      mode: 0600
+
+  - name: Download Calico Prometheus operator file
+    get_url:
+      url: https://downloads.tigera.io/ee/{{ ce_version }}/manifests/tigera-prometheus-operator.yaml
+      dest: $HOME/calico/tigera-prometheus-operator.yaml
+      mode: 0600
+
+  - name: Download Calico Enterprise custom-resources file
+    get_url:
+      force: true
+      url: "{{ cr_dowload_url }}"
+      dest: $HOME/calico/custom-resources.yaml
+      mode: 0600
+
+  - name: Copy Calico Enterprise pull-secret, license, storageClass
+    copy: src={{ item.src }} dest={{ item.dest }}
+    with_items:
+    - { src: './license.yaml', dest: '$HOME/calico/' }
+    - { src: './pull-secret.json', dest: '$HOME/calico/' }
+    - { src: '../configs/storageClass.yaml', dest: '$HOME/calico/storageClass.yaml' }
+    # - { src: '../configs/storageClass.csi.yaml', dest: '$HOME/calico/storageClass.yaml' }
+    - { src: './azure-cloud.conf', dest: '$HOME/calico/azure-cloud.conf' }
+    - { src: '../configs/pv-instances.yaml', dest: '$HOME/calico/pv-instances.yaml' }
+
+  - name: Configure Azure Disk CSI driver [required since K8s v1.23]
+    shell: |
+      curl -skSL https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/v1.28.6/deploy/install-driver.sh | bash -s v1.28.6 snapshot --
+    when: storage_type == 'csi'
+
+  - name: Get azure-cloud.conf as encoded base64 string
+    shell: |
+      cat $HOME/calico/azure-cloud.conf | base64 | awk '{printf $0}'
+    register: azure_cloud_conf
+    when: storage_type == 'csi'
+
+  - name: print azure_cloud_conf value
+    debug:
+      msg: "{{ azure_cloud_conf.stdout }}"
+    when: storage_type == 'csi'
+
+  - name: Check if azure-cloud-provider secret already exists
+    command: kubectl -n kube-system get secret -ojsonpath='{.items[?(@.metadata.name=="azure-cloud-provider")].metadata.name}'
+    register: azure_cloud_secrets_exist
+    when: storage_type == 'csi'
+
+  - name: Configure azure-cloud-provider secret that is used by csi-azuredisk-controller
+    shell: |-
+      kubectl apply -f-<<EOF
+      apiVersion: v1
+      data:
+        cloud-config: >-
+          {{ azure_cloud_conf.stdout }}
+      kind: Secret
+      metadata:
+        name: azure-cloud-provider
+        namespace: kube-system
+      type: Opaque
+      EOF
+    when:
+    - storage_type == 'csi'
+    - azure_cloud_secrets_exist.stdout != 'azure-cloud-provider'
+
+  - name: Get StorageClass configuraiton
+    command: kubectl get sc -ojsonpath='{.items[?(@.metadata.name=="tigera-elasticsearch")].metadata.name}'
+    register: sc_tigera_name
+
+  - name: Configure storageClass for Calico Enterprise
+    shell: |
+      kubectl create -f $HOME/calico/storageClass.yaml
+      
+    when: sc_tigera_name.stdout != 'tigera-elasticsearch'
+
+  - name: Get PV configuraiton
+    command: kubectl get pv -ojsonpath='{.items[?(@.spec.storageClassName=="tigera-elasticsearch")].metadata.name}'
+    register: storage_pv_name
+
+  # - name: print PV condition
+  #   debug:
+  #     msg: "PV count is {{storage_pv_name.stdout_lines | length}}"
+  #   when: storage_pv_name.stdout_lines | length == 0
+
+  - name: Configure PVs
+    shell: |
+      kubectl apply -f $HOME/calico/pv-instances.yaml
+    when:
+    - storage_pv_name.stdout_lines | length == 0
+    - storage_type == 'classic'
+
+  - name: Check if tigera operator already installed
+    command: |
+      kubectl api-resources --api-group=operator.tigera.io --no-headers=true
+    register: tigera_operator_check
+
+  - name: Install tigera operator and prometheus operator
+    shell: |
+      kubectl create -f $HOME/calico/tigera-operator.yaml
+      kubectl create -f $HOME/calico/tigera-prometheus-operator.yaml
+    when: tigera_operator_check.stdout == ''
+
+  - name: Check if tigera pull secret already exists
+    command: kubectl -n tigera-operator get secret -ojsonpath='{.items[?(@.metadata.name=="tigera-pull-secret")].metadata.name}'
+    register: tigera_secrets_exist
+
+  - name: Configure pull secret
+    shell: |
+      kubectl create secret generic tigera-pull-secret \
+      --type=kubernetes.io/dockerconfigjson -n tigera-operator \
+      --from-file=.dockerconfigjson=$HOME/calico/pull-secret.json
+      kubectl create secret generic tigera-pull-secret \
+      --type=kubernetes.io/dockerconfigjson -n tigera-prometheus \
+      --from-file=.dockerconfigjson=$HOME/calico/pull-secret.json
+      kubectl patch deployment -n tigera-prometheus calico-prometheus-operator \
+      -p '{"spec":{"template":{"spec":{"imagePullSecrets":[{"name": "tigera-pull-secret"}]}}}}'
+    when: tigera_secrets_exist.stdout != 'tigera-pull-secret'
+
+  - name: Set VXLAN encapsulation and adjust network configuration
+    shell: |
+      # when using Azure, make sure to configure VXLAN networking as IPIP is not supported on Azure
+      sed -i 's?cidr:.*$?cidr: {{ pod_cidr }}?1; s/encapsulation:.*$/encapsulation: VXLAN/1' $HOME/calico/custom-resources.yaml
+    become: false
+
+  - name: Remove kubernetesProvider setting
+    shell: |
+      sed -i '/kubernetesProvider:.*$/d' $HOME/calico/custom-resources.yaml
+      #sed -i 's/VXLANCrossSubnet/IPIPCrossSubnet/g' $HOME/calico/custom-resources.yaml
+    become: false
+    when: cluster_type == 'kubeadm'
+
+  - name: Install Calico custom-resources
+    shell: |
+      kubectl apply -f $HOME/calico/custom-resources.yaml
+
+  - name: Wait for Tigear APIServer to become available
+    command: |
+      kubectl get tigerastatus apiserver -ojsonpath='{.status.conditions[?(@.type=="Available")].status}'
+    retries: 10
+    delay: 30
+    register: tigera_apiserver_status
+    until: tigera_apiserver_status.stdout.find("True") != -1
+
+  - name: Apply Tigera license
+    shell: |
+      kubectl apply -f $HOME/calico/license.yaml

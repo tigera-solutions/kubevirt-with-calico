@@ -1,0 +1,6 @@
+---
+# test connection to all nodes
+
+- name: ping call
+  ping:
+    data: pong

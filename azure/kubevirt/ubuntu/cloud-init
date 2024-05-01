@@ -1,0 +1,46 @@
+#cloud-config
+users:
+  - default
+  - name: ubuntu
+    passwd: "$6$kW4vfBM9kGgq4hr$TFtHW7.3jOECR9UCBuw9NrdSMJETzSVoNQGcVv2y."
+    shell: /bin/bash
+    lock-passwd: false
+    ssh_pwauth: True
+    chpasswd: { expire: False }
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    groups: users, admin
+    ssh_authorized_keys:
+      - <INSERT_YOUR_PUBLIC_SSH_KEY_HERE>
+runcmd:
+  - sudo apt update
+  # install nginx package
+  - sudo apt install nginx -y
+  # enable nginx as systemd service
+  - sudo systemctl enable nginx && sudo systemctl start nginx
+  # create nginx html file on blue instance
+  - |-
+    cat << EOF | sudo tee /var/www/html/index.html
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <title>Welcome to nginx from Kubevirt VM</title>
+    <style>
+    html { color-scheme: only dark; background-color: #33C4FF; }
+    body { width: 35em; margin: 0 auto;
+    font-family: Tahoma, Verdana, Arial, sans-serif; }
+    </style>
+    </head>
+    <body>
+    <h1>Welcome to nginx - Kubevirt on Calico in action</h1>
+    <p>If you see this page, the nginx web server is successfully installed and
+    working. Further configuration is required.</p>
+
+    <p>For online documentation and support please refer to
+    <a href="http://nginx.org/">nginx.org</a>.<br/>
+    Commercial support is available at
+    <a href="http://nginx.com/">nginx.com</a>.</p>
+
+    <p><em>Thank you for using nginx, kubevirt, and calico.</em></p>
+    </body>
+    </html>
+    EOF

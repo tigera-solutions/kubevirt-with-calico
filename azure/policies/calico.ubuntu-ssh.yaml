@@ -1,0 +1,17 @@
+# policy allows SSH access to Ubuntu VM
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: ubuntu-ssh
+spec:
+  order: 100
+  selector: "kubevirt.io/domain == 'ubuntu-vm'"
+  types:
+  - Ingress
+  ingress:
+  - action: Allow
+    protocol: TCP
+    source: {}
+    destination:
+      ports:
+      - '22'

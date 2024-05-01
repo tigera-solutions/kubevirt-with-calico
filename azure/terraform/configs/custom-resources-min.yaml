@@ -1,0 +1,36 @@
+# This section includes base Calico Enterprise installation configuration.
+# For more information, see: https://docs.tigera.io/master/reference/installation/api#operator.tigera.io/v1.Installation
+apiVersion: operator.tigera.io/v1
+kind: Installation
+metadata:
+  name: default
+spec:
+  # Install Calico Enterprise
+  variant: TigeraSecureEnterprise
+
+  # List of image pull secrets to use when installing images from a container registry.
+  # If specified, secrets must be created in the `tigera-operator` namespace.
+  imagePullSecrets:
+    - name: tigera-pull-secret
+
+  calicoNetwork:
+    bgp: Disabled
+    ipPools:
+    - cidr: 10.244.0.0/16
+      encapsulation: VXLAN
+      natOutgoing: "Enabled"
+      # encapsulation: VXLANCrossSubnet
+
+  # Optionally, a custom registry to use for pulling images.
+  # registry: <my-registry>
+
+---
+
+# This section installs and configures the Calico Enterprise API server.
+# For more information, see: https://docs.tigera.io/master/reference/installation/api#operator.tigera.io/v1.APIServer
+apiVersion: operator.tigera.io/v1
+kind: APIServer
+metadata:
+  name: tigera-secure
+
+---

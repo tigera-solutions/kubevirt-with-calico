@@ -1,0 +1,36 @@
+---
+- name: Wait for control plane to start.
+  wait_for:
+    # host: "{{ leader_private_ip }}"
+    host: "{{ groups['masters_pvt_ip'][0] }}"
+    port: "6443"
+    state: started
+  become: false
+
+- name: Restart containerd.service
+  service:
+    name: containerd
+    state: restarted
+    # sleep: 2
+
+# - name: Wait for control plane to start.
+#   local_action: 
+#     module: wait_for
+#     # host: "{{ leader_private_ip }}"
+#     host: "{{ groups['masters_pvt_ip'][0] }}"
+#     # host: "172.10.1.4"
+#     port: "6443"
+#     # delay: 10
+#     # timeout: 300
+#     state: started
+  become: true
+
+# Join the nodes to the Kubernetes cluster using below code.
+- name: Copy the join command to server location
+  copy: src=./join-command dest=/tmp/join-command.sh mode=0777
+  become: true
+
+- name: Join the node to cluster
+  command: sh /tmp/join-command.sh
+  become: true
+

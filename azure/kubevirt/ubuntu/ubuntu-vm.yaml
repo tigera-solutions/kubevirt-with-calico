@@ -1,0 +1,65 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: ubuntu-vm
+spec:
+  running: false
+  template:
+    metadata:
+      labels:
+        kubevirt.io/size: small
+        kubevirt.io/domain: ubuntu-vm
+    spec:
+      domain:
+        cpu:
+          cores: 2
+        devices:
+          disks:
+            - name: containerdisk
+              disk:
+                bus: virtio
+            - name: cloudinitdisk
+              disk:
+                bus: virtio
+          interfaces:
+          - name: default
+            masquerade: {}
+        resources:
+          requests:
+            memory: 4096Mi
+      networks:
+      - name: default
+        pod: {}
+      volumes:
+        - name: containerdisk
+          containerDisk:
+            image: tedezed/ubuntu-container-disk:22.0
+        - name: cloudinitdisk
+          cloudInitNoCloud:
+            userDataBase64: ${CLOUDINIT}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ubuntu-ssh
+spec:
+  ports:
+  - port: 22
+    targetPort: 22
+    protocol: TCP
+    nodePort: 30022
+  selector:
+    kubevirt.io/domain: ubuntu-vm
+  type: NodePort
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ubuntu-nginx
+spec:
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP
+  selector:
+    kubevirt.io/domain: ubuntu-vm

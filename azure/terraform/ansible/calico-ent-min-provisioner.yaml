@@ -1,0 +1,177 @@
+---
+- hosts: masters
+  become: false
+  vars:
+    ce_version: "v3.19.0-1.0"
+    dataplane: "Iptables" # allowed values: Iptables, BPF
+    pod_cidr: "10.244.0.0/16"
+  tasks:
+
+  - name: Ensure $HOME/calico dir
+    file:
+      path: $HOME/calico
+      state: directory
+    tags:
+    - copy_config
+
+  - name: Download Calico Enterprise operator file
+    get_url:
+      url: https://downloads.tigera.io/ee/{{ ce_version }}/manifests/tigera-operator.yaml
+      dest: $HOME/calico/tigera-operator.yaml
+      mode: 0600
+    tags:
+    - copy_config
+
+  - name: Download Calico Prometheus operator file
+    get_url:
+      url: https://downloads.tigera.io/ee/{{ ce_version }}/manifests/tigera-prometheus-operator.yaml
+      dest: $HOME/calico/tigera-prometheus-operator.yaml
+      mode: 0600
+    tags:
+    - copy_config
+
+  - name: Download Calico Enterprise custom-resources file
+    get_url:
+      url: https://downloads.tigera.io/ee/{{ ce_version }}/manifests/custom-resources.yaml
+      dest: $HOME/calico/custom-resources.yaml
+      mode: 0600
+    tags:
+    - copy_config
+
+  - name: Copy Calico Enterprise pull-secret, license, storageClass, custom-resources files
+    copy: src={{ item.src }} dest={{ item.dest }}
+    with_items:
+    - { src: './license.yaml', dest: '$HOME/calico/' }
+    - { src: './pull-secret.json', dest: '$HOME/calico/' }
+    # - { src: '../configs/storageClass.yaml', dest: '$HOME/calico/' }
+    - { src: '../configs/storageClass.csi.yaml', dest: '$HOME/calico/storageClass.yaml' }
+    - { src: '../configs/custom-resources-min.yaml', dest: '$HOME/calico/custom-resources-min.yaml' }
+    - { src: '../configs/custom-resources-min-ebpf.yaml', dest: '$HOME/calico/custom-resources-min-ebpf.yaml' }
+    tags:
+    - copy_config
+
+  # - name: Configure Azure Disk CSI driver [required since K8s v1.23]
+  #   shell: |
+  #     curl -skSL https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/v1.28.6/deploy/install-driver.sh | bash -s v1.28.6 snapshot --
+
+  - name: Get StorageClass configuraiton
+    command: kubectl get sc -ojsonpath='{.items[?(@.metadata.name=="tigera-elasticsearch")].metadata.name}'
+    register: sc_tigera_name
+    tags:
+    - install_calico
+
+  - name: Configure storageClass for Calico Enterprise
+    shell: |
+      kubectl create -f $HOME/calico/storageClass.yaml
+    when: sc_tigera_name.stdout != 'tigera-elasticsearch'
+    tags:
+    - install_calico
+
+  - name: Check if tigera operator already installed
+    command: |
+      kubectl api-resources --api-group=operator.tigera.io --no-headers=true
+    register: tigera_operator_check
+    tags:
+    - install_calico
+
+  - name: Install tigera operator
+    shell: |
+      kubectl create -f $HOME/calico/tigera-operator.yaml
+      #kubectl apply -f $HOME/calico/tigera-prometheus-operator.yaml
+    when: tigera_operator_check.stdout == ''
+    # when: tigera_operator_check.stdout | int > 0
+    tags:
+    - install_calico
+
+  - name: Check if tigera pull secret already exists
+    command: kubectl -n tigera-operator get secret -ojsonpath='{.items[?(@.metadata.name=="tigera-pull-secret")].metadata.name}'
+    register: tigera_secrets_exist
+    tags:
+    - install_calico
+
+  - name: Configure pull secret
+    shell: |
+      kubectl create secret generic tigera-pull-secret \
+      --type=kubernetes.io/dockerconfigjson -n tigera-operator \
+      --from-file=.dockerconfigjson=$HOME/calico/pull-secret.json
+      # kubectl create secret generic tigera-pull-secret \
+      # --type=kubernetes.io/dockerconfigjson -n tigera-prometheus \
+      # --from-file=.dockerconfigjson=$HOME/calico/pull-secret.json
+      # kubectl patch deployment -n tigera-prometheus calico-prometheus-operator \
+      # -p '{"spec":{"template":{"spec":{"imagePullSecrets":[{"name": "tigera-pull-secret"}]}}}}'
+    when: tigera_secrets_exist.stdout != 'tigera-pull-secret'
+    tags:
+    - install_calico
+
+  - name: Prepare custom-resources.yaml manifest for Iptables
+    shell: |
+      cp $HOME/calico/custom-resources-min.yaml $HOME/calico/custom-resources.yaml
+    become: false
+    when: dataplane == 'Iptables'
+    tags:
+    - copy_config
+
+  - name: Prepare custom-resources.yaml manifest for eBPF
+    shell: |
+      cp $HOME/calico/custom-resources-min-ebpf.yaml $HOME/calico/custom-resources.yaml
+    become: false
+    when: dataplane == 'BPF'
+    tags:
+    - copy_config
+
+  - name: Set VXLAN encapsulation and adjust network configuration
+    shell: |
+      # when using Azure, make sure to configure VXLAN networking as IPIP is not supported on Azure
+      sed -i 's/linuxDataplane:.*$/linuxDataplane: {{ dataplane }}/1; s?cidr:.*$?cidr: {{ pod_cidr }}?1; s/encapsulation:.*$/encapsulation: VXLAN/1' $HOME/calico/custom-resources.yaml
+    become: false
+    tags:
+    - copy_config
+
+  - name: Install Calico custom-resources.yaml
+    shell: |
+      kubectl apply -f $HOME/calico/custom-resources.yaml
+    become: false
+    tags:
+    - install_calico
+
+  - name: Remove kube-proxy service that is not used with BPF dataplane
+    shell: |
+      kubectl delete ds -n kube-system kube-proxy
+    when: dataplane == 'BPF'
+    tags:
+    - install_calico
+
+  - name: Configure kubernetes_services_endpoint for BPF dataplane
+    shell: |
+      APISERVER_ENDPOINT=$(kubectl cluster-info | awk '{print $NF}' | head -1 | sed -E 's~https://(www\.)?([^:]+).*~\2~')
+      SERVICE_PORT=$(kubectl cluster-info | awk '{print $NF}' | head -1 | awk -F'[/:]+' '{ sub("^www\.", "", $2); print $3 }')
+      kubectl apply -f-<<\EOF
+      kind: ConfigMap
+      apiVersion: v1
+      metadata:
+        name: kubernetes-services-endpoint
+        namespace: tigera-operator
+      data:
+        KUBERNETES_SERVICE_HOST: "${APISERVER_ENDPOINT}"
+        KUBERNETES_SERVICE_PORT: "${SERVICE_PORT}"
+        #KUBERNETES_SERVICE_PORT: "443"
+      EOF
+    when: dataplane == 'BPF'
+    tags:
+    - install_calico
+
+  - name: Wait for Tigear APIServer to become available
+    command: |
+      kubectl get tigerastatus apiserver -ojsonpath='{.status.conditions[?(@.type=="Available")].status}'
+    retries: 10
+    delay: 30
+    register: tigera_apiserver_status
+    until: tigera_apiserver_status.stdout.find("True") != -1
+    tags:
+    - install_calico
+
+  - name: Apply Tigera license
+    shell: |
+      kubectl apply -f $HOME/calico/license.yaml
+    tags:
+    - install_calico

@@ -1,0 +1,45 @@
+---
+# this role contains tasks to updated API serverer accepted SANS
+
+- name: Fetch kubeconfig file from control plane node to local machine
+  fetch: src={{ item.src }} dest={{ item.dest }} flat=yes
+  with_items:
+  - { src: '/home/azureuser/.kube/config', dest: './kubeconfig' }
+
+- name: Get kubeadm configuration into '/home/azureuser/kubeadm-config.yaml'
+  shell: |
+    kubectl --kubeconfig /home/azureuser/.kube/config -n kube-system get configmap kubeadm-config -o jsonpath='{.data.ClusterConfiguration}' > /home/azureuser/kubeadm-config.yaml
+
+- name: Add certSANs to kubeadm-config.yaml
+  shell: |
+    PUB_IP=$(curl -H "Metadata:true" --noproxy "*" "http://169.254.169.254/metadata/instance/network/interface/0/ipv4/ipAddress/0/publicIpAddress?api-version=2023-07-01&format=text")
+    PVT_IP=$(hostname -I | awk '{print $1}')
+    sed -i "s/apiServer\:/apiServer\:\n  certSANs\:\n  \- 127.0.0.1\n  - $PVT_IP\n  - $PUB_IP\n  - {{ groups['masters_pub_ip'][0] }}/1" /home/azureuser/kubeadm-config.yaml
+
+- name: Move APIServer keys into the /azureuser/home path as they will be replaced
+  shell: |
+    mv /etc/kubernetes/pki/apiserver.crt /home/azureuser
+    mv /etc/kubernetes/pki/apiserver.key /home/azureuser
+    #mv /etc/kubernetes/pki/apiserver.{crt,key} $HOME
+  become: yes
+
+- name: Update kubeadm configuration in cluster using updated kubeadm-config.yaml
+  shell: |
+    kubeadm init phase certs apiserver --config kubeadm-config.yaml
+  become: yes
+
+- name: Verify that the new APIServer cert has {{ groups['masters_pub_ip'][0] }} entry
+  shell: |
+    openssl x509 -in /etc/kubernetes/pki/apiserver.crt -text -noout | grep "{{ groups['masters_pub_ip'][0] }}"
+  become: yes
+
+- name: Upload new configuration into the cluster configmap
+  shell: |
+    kubeadm init phase upload-config kubeadm --config /home/azureuser/kubeadm-config.yaml
+  become: yes
+
+- name: Updated retrieved kubeconfig with  IP for the API server endpoint
+  shell: |
+    sed -i 's?server: .*$?server: https://{{groups["masters_pub_ip"][0]}}:6443?1' kubeconfig
+  delegate_to: localhost
+  become: no

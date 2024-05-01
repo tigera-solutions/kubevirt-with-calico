@@ -1,0 +1,4 @@
+---
+# vars applicable to common role
+
+# k8s_version: 1.28.9

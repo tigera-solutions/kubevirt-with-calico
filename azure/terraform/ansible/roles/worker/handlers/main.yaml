@@ -1,0 +1,6 @@
+---
+# This role contains worker handlers that will run on all worker nodes.
+
+# Setup a handler for checking CRI daemon using the below code.
+- name: containerd status
+  service: name=containerd state=started

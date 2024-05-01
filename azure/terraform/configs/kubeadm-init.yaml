@@ -1,0 +1,28 @@
+apiVersion: kubeadm.k8s.io/v1beta3
+kind: InitConfiguration
+nodeRegistration:
+  criSocket: unix:///var/run/containerd/containerd.sock
+  # imagePullPolicy: IfNotPresent
+  # # taints:
+  # # - effect: NoSchedule
+  # #   key: node-role.kubernetes.io/control-plane
+  # kubeletExtraArgs:
+  #   cloud-provider: external
+---
+apiVersion: kubeadm.k8s.io/v1beta3
+kind: ClusterConfiguration
+kubernetesVersion: "v1.28.8"
+networking:
+  serviceSubnet: "10.96.0.0/12"
+  podSubnet: "10.244.0.0/16"
+#   dnsDomain: cluster.local
+# apiServer:
+#   timeoutForControlPlane: 4m0s
+#   extraArgs:
+#     # you'll need to install cloud provider controller manager if you want cloud integrations for the cluster,
+#     # such as LB provisioning
+#     cloud-provider: external
+# controllerManager:
+#   extraArgs:
+#     cloud-provider: external
+#     configure-cloud-routes: "false"

@@ -1,0 +1,16 @@
+# policy allows ingress into Nginx service running in Kubevirt VM with label "kubevirt.io/domain: ubuntu-vm" from any pod running in the default namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ubuntu-nginx
+spec:
+  podSelector:
+    matchLabels:
+      kubevirt.io/domain: ubuntu-vm
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          projectcalico.org/name: default

@@ -1,0 +1,43 @@
+# if needed, replace unique alphanumeric part in each PV name to follow naming in your cluster PVs
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: elasticsearch-data-tigera-secure-es-7f5dee596fef130f-0
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /var/tigera/elastic-data/1
+  persistentVolumeReclaimPolicy: Recycle
+  storageClassName: tigera-elasticsearch
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: elasticsearch-data-tigera-secure-es-7f5dee596fef130f-1
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /var/tigera/elastic-data/1
+  persistentVolumeReclaimPolicy: Recycle
+  storageClassName: tigera-elasticsearch
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: elasticsearch-data-tigera-secure-es-7f5dee596fef130f-2
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /var/tigera/elastic-data/1
+  persistentVolumeReclaimPolicy: Recycle
+  storageClassName: tigera-elasticsearch

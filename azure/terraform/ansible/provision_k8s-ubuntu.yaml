@@ -1,0 +1,36 @@
+---
+## This playbook deploys the whole application stack in this site.
+
+# ping all hosts
+- hosts: nodes
+  roles:
+  - ping
+
+# Apply common configuration to all hosts
+- hosts: nodes
+  roles:
+  - common
+
+# Configure master nodes
+- hosts: masters
+  roles:
+  - master
+
+  # tags:
+  # - master
+
+# Configure worker nodes
+- hosts: workers
+  roles:
+  - worker
+
+  # tags:
+  # - worker
+
+# Updated API server allowed SANS endpoints
+- hosts: masters
+  roles:
+  - update_api_ep
+
+  # tags:
+  # - master

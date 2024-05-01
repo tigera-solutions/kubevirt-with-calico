@@ -1,0 +1,27 @@
+[masters]
+%{ for index, mip in master_public_ips ~}
+${ mip } ansible_user=azureuser
+%{ endfor ~}
+
+[workers]
+%{ for index, wip in worker_public_ips ~}
+${ wip } ansible_user=azureuser
+%{ endfor ~}
+
+[nodes:children]
+masters
+workers
+
+[masters_pub_ip]
+%{ for index, mip in master_public_ips ~}
+${ mip }
+%{ endfor ~}
+
+[masters_pvt_ip]
+${ master_private_ip }
+
+[masters:vars]
+leader_private_ip=${ master_private_ip }
+
+[workers:vars]
+leader_private_ip=${ master_private_ip }
