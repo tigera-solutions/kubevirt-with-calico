@@ -189,14 +189,14 @@ This feature requires [Multus](https://github.com/intel/multus-cni/) meta-CNI.
 
 #### install Multus
 
-Download [Multus manifest](https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-cni/master/deployments/multus-daemonset-thick.yml) and increase memory limits from default `50Mi` to `200Mi` for `kube-multus` container.
+Download [Multus manifest](https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-cni/master/deployments/multus-daemonset-thick.yml) and increase memory limits from default `50Mi` to `300Mi` for `kube-multus` container and from `15Mi` to `50Mi` for `install-multus-binary` init container.
 
 ```bash
 # download Multus manifest
 curl -O https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-cni/master/deployments/multus-daemonset-thick.yml
 ```
 
-Example of increased memory limits for kube-multus container
+Example of increased memory limits
 
 ```yaml
 .....
@@ -210,7 +210,19 @@ Example of increased memory limits for kube-multus container
               memory: "50Mi"
             limits:
               cpu: "100m"
-              memory: "200Mi"
+              memory: "300Mi"
+.....
+      initContainers:
+        - name: install-multus-binary
+          image: ghcr.io/k8snetworkplumbingwg/multus-cni:snapshot-thick
+          command:
+            - "cp"
+            - "/usr/src/multus-cni/bin/multus-shim"
+            - "/host/opt/cni/bin/multus-shim"
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "50Mi"
 .....
 ```
 
