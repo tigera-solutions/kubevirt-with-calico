@@ -1,0 +1,39 @@
+---
+apiVersion: projectcalico.org/v3
+kind: IPPool
+metadata:
+  name: default-ipv4-ippool
+spec:
+  blockSize: 26
+  cidr: 10.244.0.0/18
+  ipipMode: Never
+  natOutgoing: true
+  nodeSelector: all()
+  vxlanMode: Always
+
+---
+apiVersion: projectcalico.org/v3
+kind: IPPool
+metadata:
+  name: cali1-ippool
+spec:
+  blockSize: 26
+  cidr: 10.244.64.0/20
+  ipipMode: Never
+  natOutgoing: true
+  nodeSelector: all()
+  vxlanMode: Always
+
+---
+apiVersion: projectcalico.org/v3
+kind: IPPool
+metadata:
+  name: cali2-ippool
+spec:
+  blockSize: 26
+  cidr: 10.244.80.0/20
+  ipipMode: Never
+  natOutgoing: true
+  nodeSelector: all()
+  vxlanMode: Always
+

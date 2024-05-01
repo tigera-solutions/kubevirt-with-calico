@@ -1,0 +1,63 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: ubuntu-vm-multi-nic
+spec:
+  running: true
+  template:
+    metadata:
+      labels:
+        kubevirt.io/size: small
+        kubevirt.io/domain: ubuntu-vm-multi-nic
+    spec:
+      domain:
+        cpu:
+          cores: 2
+        devices:
+          disks:
+            - name: containerdisk
+              disk:
+                bus: virtio
+            - name: cloudinitdisk
+              disk:
+                bus: virtio
+          interfaces:
+          - name: default
+            masquerade: {}
+          - name: net1
+            bridge: {}
+          - name: net2
+            bridge: {}
+        resources:
+          requests:
+            memory: 4096Mi
+      networks:
+      - name: default
+        pod: {}
+      - name: net1
+        multus:
+          networkName: additional-calico-network-1
+      - name: net2
+        multus:
+          networkName: additional-calico-network-2
+      volumes:
+        - name: containerdisk
+          containerDisk:
+            image: tedezed/ubuntu-container-disk:22.0
+        - name: cloudinitdisk
+          cloudInitNoCloud:
+            userDataBase64: ${CLOUDINIT}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ubuntu-vm-multi-nic-svc
+spec:
+  ports:
+  - port: 22
+    targetPort: 22
+    protocol: TCP
+    nodePort: 30122
+  selector:
+    kubevirt.io/domain: ubuntu-vm-multi-nic
+  type: NodePort

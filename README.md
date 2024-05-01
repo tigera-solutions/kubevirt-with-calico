@@ -82,7 +82,7 @@ sudo install virtctl /usr/local/bin
 
 Deploy a test pod and an Ubuntu VM and test connectivity between them.
 
->By default Ubuntu VM image doesn't provide a default user. You have to configure it. This example uses `cloud-init` to configure the default user and set SSH access to the VM. It is assumed that `rsa_id.pub` belongs to the SSH key pair that is used to access Kubernetes hosts.
+>by default Ubuntu VM image doesn't provide a default user. You have to configure it. This example uses `cloud-init` to configure the default user and set SSH access to the VM. It is assumed that `rsa_id.pub` belongs to the SSH key pair that is used to access Kubernetes hosts.
 
 ```bash
 # if you're in the terraform dir, get one level up
@@ -150,8 +150,149 @@ kubeclt -n dev exec -t centos -- sh -c 'curl -m2 ubuntu-nginx'
 kubectl apply -f policies/calico.ubuntu-ssh.yaml
 ```
 
+### install Calico Enterprise or Calico Cloud
+
+Calico commercial versions such as Calico Enterprise and Calico Cloud offer additional capabilities such as visibility & observability tools, troubleshooting tools, and advanced security features.
+In this section we'll use a multi-interface support to configure a Kubevirt VM with multiple interfaces.
+
+Calico Enterprise requires a license key and a pull-secret. If you want to try it, contact [Tigera](https://tigera.io/contact).
+Alternatively, you can use a [Calico Cloud trial account](https://www.tigera.io/tigera-products/calico-cloud/) to try out Calico commercial features.
+
+Example to install Calico Enterprise version using ansible script
+
+```bash
+###################################################################
+## Calico Enterprise requires licence key and pull-secret resources
+###################################################################
+# copy Tigera license and pull secret into the ansible/ folder
+LICENSE_PATH=/path/to/license.yaml
+PULL_SECRET_PATH=/path/to/pull-secret.json
+cp $LICENSE_PATH ansible/license.yaml
+cp $PULL_SECRET_PATH ansible/pull-secret.json
+
+############################
+## install Calico Enterprise
+############################
+ansible-playbook -u azureuser --private-key $SSH_KEY --timeout 60 -i ansible/inventory ansible/calico-ent-provisioner.yaml
+
+#####################################################
+## install minimal configuration of Calico Enterprise
+#####################################################
+# ansible-playbook -u azureuser --private-key $SSH_KEY --timeout 60 -i ansible/inventory ansible/calico-ent-min-provisioner.yaml
+```
+
+### configure multiple networks per pod
+
+>this is a commercial feature and requires either Calico Enterprise or Calico Cloud version of Calico CNI.
+
+This feature requires [Multus](https://github.com/intel/multus-cni/) meta-CNI.
+
+#### install Multus
+
+Download [Multus manifest](https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-cni/master/deployments/multus-daemonset-thick.yml) and increase memory limits from default `50Mi` to `200Mi` for `kube-multus` container.
+
+```bash
+# download Multus manifest
+curl -O https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-cni/master/deployments/multus-daemonset-thick.yml
+```
+
+Example of increased memory limits for kube-multus container
+
+```yaml
+.....
+      containers:
+        - name: kube-multus
+          image: ghcr.io/k8snetworkplumbingwg/multus-cni:snapshot-thick
+          command: [ "/usr/src/multus-cni/bin/multus-daemon" ]
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "50Mi"
+            limits:
+              cpu: "100m"
+              memory: "200Mi"
+.....
+```
+
+Deploy Multus CNI
+
+```bash
+kubectl apply -f multus-daemonset-thick.yml
+```
+
+#### enable multiple networks support in Calico
+
+Enable multiple networks per pod support in Calico.
+
+```bash
+# enable Multus mode in Calico Installation resource
+kubectl patch installations default --type merge --patch='{"spec": {"calicoNetwork": {"multiInterfaceMode": "Multus"}}}'
+
+# view multiInterfaceMode configuration
+kubectl get installations default -ojsonpath='{.spec.calicoNetwork.multiInterfaceMode}'
+```
+
+Configure several Calico IPPool resources that will be used to configure different networks in a VM/pod.
+
+>use [calicoctl](https://docs.tigera.io/calico-enterprise/latest/operations/clis/calicoctl/install) CLI to run the commands below as modifying IPPool resource in the existing cluster requires validation that `calicoctl` provides.
+
+```bash
+# delete existing default IPPool
+calicoctl delete ippool default-ipv4-ippool
+# apply new ippools configuration
+calicoctl apply -f calico/ippools.yaml
+# cycle all pods to get new IPs
+kubectl delete pod --all -A
+```
+
+Deploy network attachment resources that will be used to create multiple interfaces in a VM/pod.
+
+```bash
+kubectl apply -f calico/network-attachments.yaml
+```
+
+#### deploy Kubevirt VM with multiple networks
+
+Deploy a Kubevirt VM with multiple networks and test connectivity.
+
+>note, that in order for the Kubevirt VM to use additional network interfaces, they need to be initialized when VM boots up. In the example VM this task is delegated to the `cloud-init-multi-nic` file that contains commands to initialize additional interfaces in the VM.
+
+```bash
+# get ssh key
+SSH_PUB_KEY=$(cat ~/.ssh/rsa_id.pub)
+# set SSH_PUB_KEY value in the kubevirt/ubuntu/cloud-init file
+# get base64 encoded text of the kubevirt/ubuntu/cloud-init file
+export CLOUDINIT=$(sed -e "s,<INSERT_YOUR_PUBLIC_SSH_KEY_HERE>,$SSH_PUB_KEY,1" kubevirt/ubuntu/cloud-init-multi-nic | base64 -i -)
+
+# deploy ubuntu VM
+## NOTE: the manifest is configured to not create VM instance once you deploy it. You can use either virtctl or kubectl commands to start a VM instance.
+sed -e "s/\${CLOUDINIT}/${CLOUDINIT}/1" kubevirt/ubuntu/ubuntu-vm-multi-nic.yaml | kubectl apply -f-
+```
+
+Connect to the VM and test connectivity using available network interfaces
+
+```bash
+# get public IP from one of the cluster nodes
+NODE_IP=xx.xx.xx.xx
+# ssh into ubuntu-vm-multi-nic
+ssh -i $SSH_KEY $NODE_IP -p 30122 -l ubuntu
+
+# list all interfaces and review assigned IPs
+ip a
+
+# view route table in the VM
+ip route
+
+# test connectivity to an endpoint using each interface
+# NOTE: interface name may differ depending on what infrastructure you use for your cluster
+ping -I enp1s0 -c1 -W2 8.8.8.8
+ping -I enp2s0 -c1 -W2 8.8.8.8
+ping -I enp3s0 -c1 -W2 8.8.8.8
+```
+
 ### clean up Azure environment
 
 ```bash
+cd terraform
 terraform destroy -auto-approve
 ```

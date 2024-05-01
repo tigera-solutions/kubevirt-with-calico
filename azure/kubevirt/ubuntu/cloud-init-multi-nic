@@ -1,0 +1,23 @@
+#cloud-config
+users:
+  - default
+  - name: ubuntu
+    passwd: "$6$kW4vfBM9kGgq4hr$TFtHW7.3jOECR9UCBuw9NrdSMJETzSVoNQGcVv2y."
+    shell: /bin/bash
+    lock-passwd: false
+    ssh_pwauth: True
+    chpasswd: { expire: False }
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    groups: users, admin
+    ssh_authorized_keys:
+      - <INSERT_YOUR_PUBLIC_SSH_KEY_HERE>
+runcmd:
+  # initialize additional interfaces and request IPs
+  - sudo ifconfig enp2s0 up
+  - sudo ifconfig enp3s0 up
+  - sudo dhclient enp2s0
+  - sudo dhclient enp3s0
+  # add routes for interfaces that use dedicated ippools
+  # this assumes that cali1-ippool is used for enp2s0 and cali2-ippool is used for enp3s0
+  - sudo ip route add 192.168.64.0/20 nexthop dev enp2s0
+  - sudo ip route add 192.168.80.0/20 nexthop dev enp3s0
