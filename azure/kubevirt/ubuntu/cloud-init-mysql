@@ -1,0 +1,31 @@
+#cloud-config
+users:
+  - default
+  - name: ubuntu
+    passwd: "$6$kW4vfBM9kGgq4hr$TFtHW7.3jOECR9UCBuw9NrdSMJETzSVoNQGcVv2y."
+    shell: /bin/bash
+    lock-passwd: false
+    ssh_pwauth: True
+    chpasswd: { expire: False }
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    groups: users, admin
+    ssh_authorized_keys:
+      - <INSERT_YOUR_PUBLIC_SSH_KEY_HERE>
+runcmd:
+  - sudo apt update
+  # install mysql package
+  - sudo apt install mysql-server -y
+  # enable mysql as systemd service
+  #- sudo systemctl enable mysqld && sudo systemctl start mysqld
+  # get myslqd status
+  #- sudo systemctl status mysqld
+  - sudo service mysql status
+  # grep auto-generated root user password
+  - sudo grep 'temporary password' /var/log/mysqld.log
+  # use mysql script to reconfigure user/pass if needed
+  #- sudo mysql_secure_installation
+  # test myslq connection with mysqladmin tool
+  #- mysqladmin -u root -p version
+  #- mysql -u root -p <PASSWORD>
+  # view mysql logs
+  #- sudo journalctl -u mysql

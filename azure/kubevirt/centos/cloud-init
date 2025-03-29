@@ -1,0 +1,69 @@
+#cloud-config
+users:
+  - name: centos
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    groups: adm,sys
+    home: /home/centos
+    shell: /bin/bash
+    lock-passwd: false
+    # passwd: "$6$kW4vfBM9kGgq4hr$TFtHW7.3jOECR9UCBuw9NrdSMJETzSVoNQGcVv2y."
+    # ssh_pwauth: True
+    # chpasswd: { expire: False }
+    ssh_authorized_keys:
+      - <INSERT_YOUR_PUBLIC_SSH_KEY_HERE>
+# only cert auth via ssh (console access can still login)
+ssh_pwauth: false
+disable_root: false
+chpasswd:
+  list: |
+    root:$6$kW4vfBM9kGgq4hr$TFtHW7.3jOECR9UCBuw9NrdSMJETzSVoNQGcVv2y.
+    centos:newpass123
+  expire: False
+package_update: true
+packages:
+  - bind-utils
+  - vim-enhanced
+runcmd:
+  # - sudo yum update
+  # install mysql/mariadb package
+  - sudo yum install mysql -y
+  # start mysql as systemd service
+  # myslq should be automatically enabled to run when installed, but if not add this command to enable it:
+  ## - sudo systemctl enable mysqld
+  - sudo systemctl start mysqld
+  # get myslqd status
+  - sudo systemctl status mysqld
+  # grep auto-generated root user password
+  - sudo grep 'temporary password' /var/log/mysqld.log
+  # use mysql script to reconfigure user/pass if needed
+  #- sudo mysql_secure_installation
+  # test myslq connection with mysqladmin tool
+  #- mysqladmin -u root -p version
+  #- mysql -u root -p <PASSWORD>
+  # create nginx html file on blue instance
+  # - |-
+  #   cat << EOF | sudo tee /var/www/html/index.html
+  #   <!DOCTYPE html>
+  #   <html>
+  #   <head>
+  #   <title>Welcome to nginx from Kubevirt VM</title>
+  #   <style>
+  #   html { color-scheme: only dark; background-color: #33C4FF; }
+  #   body { width: 35em; margin: 0 auto;
+  #   font-family: Tahoma, Verdana, Arial, sans-serif; }
+  #   </style>
+  #   </head>
+  #   <body>
+  #   <h1>Welcome to nginx - Kubevirt on Calico in action</h1>
+  #   <p>If you see this page, the nginx web server is successfully installed and
+  #   working. Further configuration is required.</p>
+
+  #   <p>For online documentation and support please refer to
+  #   <a href="http://nginx.org/">nginx.org</a>.<br/>
+  #   Commercial support is available at
+  #   <a href="http://nginx.com/">nginx.com</a>.</p>
+
+  #   <p><em>Thank you for using nginx, kubevirt, and calico.</em></p>
+  #   </body>
+  #   </html>
+  #   EOF

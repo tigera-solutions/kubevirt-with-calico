@@ -2,7 +2,7 @@
 - hosts: masters
   become: false
   vars:
-    calico_version: "v3.27.3"
+    calico_version: "v3.29.2"
     enable_ipip: false
     pod_cidr: "10.244.0.0/16"
   tasks:

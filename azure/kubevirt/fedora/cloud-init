@@ -1,0 +1,21 @@
+#cloud-config
+users:
+  - name: core
+    shell: /bin/bash
+    lock-passwd: false
+    ssh_pwauth: True
+    chpasswd: { expire: False }
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    groups: adm,sys
+    ssh_authorized_keys:
+      - <INSERT_YOUR_PUBLIC_SSH_KEY_HERE>
+password: fedora
+chpasswd: { expire: False }
+ssh_pwauth: True
+packages:
+  - mysql-server
+runcmd:
+  - systemctl enable mysqld
+  - systemctl start mysqld
+  - mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY 'root_password';"
+  - mysql -e "CREATE DATABASE testdb;"

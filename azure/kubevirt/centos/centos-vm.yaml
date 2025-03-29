@@ -1,18 +1,15 @@
+# see example images: https://github.com/Tedezed/kubevirt-images-generator
 apiVersion: kubevirt.io/v1
 kind: VirtualMachine
 metadata:
-  name: ubuntu-vm
+  name: centos-vm
 spec:
-  # running: false
-  runStrategy: RerunOnFailure
-  # runStrategy: Halted
+  running: false
   template:
     metadata:
       labels:
         kubevirt.io/size: small
-        kubevirt.io/domain: ubuntu-vm
-        ostype: linux
-        osgroup: ubuntu
+        kubevirt.io/domain: centos-vm
     spec:
       domain:
         cpu:
@@ -37,7 +34,7 @@ spec:
       volumes:
         - name: containerdisk
           containerDisk:
-            image: tedezed/ubuntu-container-disk:22.0
+            image: tedezed/centos-container-disk:7.0
         - name: cloudinitdisk
           cloudInitNoCloud:
             # if this section exceeds 2048 characters, you'll have to use k8s secret and reference the secret instead of having the data inline
@@ -49,25 +46,25 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: ubuntu-ssh
+  name: centos-ssh
 spec:
   ports:
   - port: 22
     targetPort: 22
     protocol: TCP
-    nodePort: 30022
+    nodePort: 30222
   selector:
-    kubevirt.io/domain: ubuntu-vm
+    kubevirt.io/domain: centos-vm
   type: NodePort
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: ubuntu-nginx
+  name: centos-mysql
 spec:
   ports:
-  - port: 80
-    targetPort: 80
+  - port: 3306
+    targetPort: 3306
     protocol: TCP
   selector:
-    kubevirt.io/domain: ubuntu-vm
+    kubevirt.io/domain: centos-vm

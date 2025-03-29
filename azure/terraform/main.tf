@@ -27,7 +27,7 @@ resource "local_file" "azure_cloud_file" {
   "cloud": "AzurePublicCloud",
   "tenantId": "${var.tenant_id}",
   "subscriptionId": "${var.azure_subscription_id}",
-  "aadClientId": "${module.serviceprincipal.app_id}",
+    "aadClientId": "${module.serviceprincipal.client_id}",
   "aadClientSecret": "${module.serviceprincipal.app_secret}",
   "resourceGroup": "${azurerm_resource_group.resourcegroup.name}",
   "location": "${var.location}",

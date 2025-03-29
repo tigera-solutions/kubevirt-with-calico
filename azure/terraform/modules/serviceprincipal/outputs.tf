@@ -8,6 +8,11 @@ output "app_id" {
   sensitive = false
 }
 
+output "client_id" {
+  value     = azuread_service_principal.self_mged_k8s_sp.client_id
+  sensitive = false
+}
+
 output "object_id" {
   value     = azuread_service_principal.self_mged_k8s_sp.object_id
   sensitive = false

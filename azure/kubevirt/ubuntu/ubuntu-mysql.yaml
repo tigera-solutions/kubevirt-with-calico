@@ -1,18 +1,14 @@
 apiVersion: kubevirt.io/v1
 kind: VirtualMachine
 metadata:
-  name: ubuntu-vm
+  name: ubuntu-mysql
 spec:
-  # running: false
-  runStrategy: RerunOnFailure
-  # runStrategy: Halted
+  running: false
   template:
     metadata:
       labels:
         kubevirt.io/size: small
-        kubevirt.io/domain: ubuntu-vm
-        ostype: linux
-        osgroup: ubuntu
+        kubevirt.io/domain: ubuntu-mysql
     spec:
       domain:
         cpu:
@@ -55,9 +51,9 @@ spec:
   - port: 22
     targetPort: 22
     protocol: TCP
-    nodePort: 30022
+    nodePort: 30322
   selector:
-    kubevirt.io/domain: ubuntu-vm
+    kubevirt.io/domain: ubuntu-mysql
   type: NodePort
 ---
 apiVersion: v1
@@ -66,8 +62,8 @@ metadata:
   name: ubuntu-nginx
 spec:
   ports:
-  - port: 80
-    targetPort: 80
+  - port: 3306
+    targetPort: 3306
     protocol: TCP
   selector:
-    kubevirt.io/domain: ubuntu-vm
+    kubevirt.io/domain: ubuntu-mysql

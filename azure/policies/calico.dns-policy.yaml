@@ -1,0 +1,29 @@
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: security.allow-external-dns-egress
+spec:
+  # requires security tier
+  tier: security
+  selector: projectcalico.org/namespace in {"default", "dev", "uat"}
+  order: 200
+  types:
+    - Egress
+  egress:
+  - action: Allow
+    source:
+      selector: app == 'ubuntu'||app == 'netshoot'||osgroup == 'ubuntu'
+    destination:
+      domains:
+      - '*.google.com'
+      - 'google.com'
+      # - '*.twilio.com'
+  # - action: Allow
+  #   destination:
+  #     selector: domain == "external"
+  # - action: Deny
+  #   source: {}
+  #   destination:
+  #     # global policy must reference global resources, e.g. global netset
+  #     # namespaced policy must reference namespaced resources, e.g. namespaced netset
+  #     selector: type == "public"

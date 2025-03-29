@@ -28,6 +28,9 @@ variable "location" {
   default     = "westus2"
 }
 
+
+# find latest Ubuntu AMI
+## az vm image list --all --publisher Canonical | jq '[.[] | select(.sku=="22_04-lts")]| max_by(.version)'
 variable "image" {
   description = "VM image"
   type        = map(string)
@@ -35,8 +38,10 @@ variable "image" {
     # Ubuntu 22.04
     publisher = "Canonical"
     offer     = "0001-com-ubuntu-server-jammy"
+    # sku       = "22_04-lts-gen2"
+    # version   = "22.04.202408010"
     sku       = "22_04-lts"
-    version   = "22.04.202403280"
+    version   = "22.04.202408010"
   }
 }
 

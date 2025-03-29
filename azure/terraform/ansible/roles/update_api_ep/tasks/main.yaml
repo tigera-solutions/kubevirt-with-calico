@@ -12,9 +12,11 @@
 
 - name: Add certSANs to kubeadm-config.yaml
   shell: |
+    # example to get public IP for VM using metadata API
     PUB_IP=$(curl -H "Metadata:true" --noproxy "*" "http://169.254.169.254/metadata/instance/network/interface/0/ipv4/ipAddress/0/publicIpAddress?api-version=2023-07-01&format=text")
     PVT_IP=$(hostname -I | awk '{print $1}')
-    sed -i "s/apiServer\:/apiServer\:\n  certSANs\:\n  \- 127.0.0.1\n  - $PVT_IP\n  - $PUB_IP\n  - {{ groups['masters_pub_ip'][0] }}/1" /home/azureuser/kubeadm-config.yaml
+    # sed -i "s/apiServer\:.*$/apiServer\:\n  certSANs\:\n  \- 127.0.0.1\n  - $PVT_IP\n  - $PUB_IP\n  - {{ groups['masters_pub_ip'][0] }}/1" /home/azureuser/kubeadm-config.yaml
+    sed -i "s/apiServer\:.*$/apiServer\:\n  certSANs\:\n  \- 127.0.0.1\n  - $PVT_IP\n  - {{ groups['masters_pub_ip'][0] }}/1" /home/azureuser/kubeadm-config.yaml
 
 - name: Move APIServer keys into the /azureuser/home path as they will be replaced
   shell: |

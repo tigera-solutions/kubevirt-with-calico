@@ -52,6 +52,8 @@ Example to install Calico open source version
 ansible-playbook -u azureuser --private-key $SSH_KEY --timeout 60 -i ansible/inventory ansible/calico-os-provisioner.yaml
 ```
 
+>NOTE: when using CSI driver for storage, it relies on service principal account. If you run into issues with CSI storage not getting created, verify the service principal account information in the generated `azure-cloud.conf`. The file is deployed into `azure-cloud-provider` secret into the cluster.
+
 ### install Kubevirt
 
 Review latest [Kubevirt docs](https://kubevirt.io/user-guide/) for most up to date installation and usage information.
@@ -96,6 +98,14 @@ export CLOUDINIT=$(sed -e "s,<INSERT_YOUR_PUBLIC_SSH_KEY_HERE>,$SSH_PUB_KEY,1" k
 # deploy ubuntu VM
 ## NOTE: the manifest is configured to not create VM instance once you deploy it. You can use either virtctl or kubectl commands to start a VM instance.
 sed -e "s/\${CLOUDINIT}/${CLOUDINIT}/1" kubevirt/ubuntu/ubuntu-vm.yaml | kubectl apply -f-
+
+## example to deploy VM using userData section as a secret
+### NOTE: if the CLOUDINIT content exceeds 2048 characters, you'll have to store it in the secret and reference the secret name instead of having the data inline in the VM manifest
+export CLOUDINIT=$(sed -e "s,<INSERT_YOUR_PUBLIC_SSH_KEY_HERE>,$SSH_PUB_KEY,1" kubevirt/ubuntu/cloud-init)
+# create k8s secret
+kubectl create secret generic ubuntu-vmi-secret --from-literal=userdata=$CLOUDINIT
+# deploy VM using secret for userData
+sed -e "/userDataBase64\:/d; s/#secretRef\:/secretRef\:/1; s/#name\:.*$/name\: ubuntu-vmi-secret/1" kubevirt/ubuntu/ubuntu-vm.yaml | kubectl apply -f-
 
 ########################################
 # example to start/stop VM using virtctl

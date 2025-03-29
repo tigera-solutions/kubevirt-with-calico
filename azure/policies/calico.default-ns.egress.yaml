@@ -2,17 +2,15 @@
 apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 metadata:
-  name: ubuntu-ssh
+  name: default-ns-egress
 spec:
-  order: 10
-  # selector: "kubevirt.io/domain == 'ubuntu-vm'"
-  selector: "osgroup == 'ubuntu'"
+  order: 1000
+  selector: app in {'netshoot','ubuntu'}
   types:
-  - Ingress
-  ingress:
+  - Egress
+  egress:
   - action: Allow
     protocol: TCP
     source: {}
     destination:
-      ports:
-      - '22'
+      namespaceSelector: "projectcalico.org/name == 'default'"

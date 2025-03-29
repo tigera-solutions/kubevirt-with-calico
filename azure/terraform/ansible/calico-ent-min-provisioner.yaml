@@ -2,7 +2,8 @@
 - hosts: masters
   become: false
   vars:
-    ce_version: "v3.19.0-1.0"
+    # ce_version: "v3.19.0-1.0"
+    ce_version: "v3.20.1"
     dataplane: "Iptables" # allowed values: Iptables, BPF
     pod_cidr: "10.244.0.0/16"
   tasks:

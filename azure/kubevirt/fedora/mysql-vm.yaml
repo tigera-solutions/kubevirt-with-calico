@@ -1,0 +1,81 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: fedora-mysql-vm
+  labels:
+    kubevirt.io/domain: fedora-mysql
+spec:
+  running: true
+  template:
+    metadata:
+      labels:
+        kubevirt.io/domain: fedora-mysql
+    spec:
+      domain:
+        devices:
+          disks:
+          - disk:
+              bus: virtio
+            name: containerdisk
+          - disk:
+              bus: virtio
+            name: cloudinitdisk
+        machine:
+          type: ""
+        resources:
+          requests:
+            memory: 2Gi
+      volumes:
+      - name: containerdisk
+        containerDisk:
+          image: kubevirt/fedora-cloud-container-disk-demo:latest
+      - name: cloudinitdisk
+        # user: fedora
+        # pass: fedora
+        cloudInitNoCloud:
+          userData: |
+            #cloud-config
+            password: fedora
+            chpasswd: { expire: False }
+            ssh_pwauth: True
+            ssh_authorized_keys:
+            - <INSERT_YOUR_PUBLIC_SSH_KEY_HERE>
+            packages:
+              - mysql-server
+            runcmd:
+              - sudo systemctl enable mariadb
+              - sudo systemctl start mariadb
+              - mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY 'root_password';"
+              - mysql -e "CREATE DATABASE testdb;"
+          # if this section exceeds 2048 characters, you'll have to use k8s secret and reference the secret instead of having the data inline
+          #userDataBase64: ${CLOUDINIT}
+          # example to reference secret
+          #secretRef:
+            #name: my-vmi-secret
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fedora-ssh
+spec:
+  ports:
+  - port: 22
+    targetPort: 22
+    protocol: TCP
+    nodePort: 30422
+  selector:
+    kubevirt.io/domain: fedora-mysql
+  type: NodePort
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fedora-mysql
+spec:
+  ports:
+  - port: 3306
+    targetPort: 3306
+    protocol: TCP
+  selector:
+    kubevirt.io/domain: fedora-mysql

@@ -1,0 +1,24 @@
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: dev
+  labels:
+    environment: dev
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ubuntu
+  namespace: dev
+  labels:
+    app: ubuntu
+spec:
+  restartPolicy: OnFailure
+  containers:
+  - name: ubuntu
+    image: ubuntu:latest
+    # spin & wait indefinitely
+    command: ["/bin/sh", "-c", "trap : TERM INT; sleep infinity & wait"]
+    resources: {}
+  nodeSelector:
+    kubernetes.io/os: linux

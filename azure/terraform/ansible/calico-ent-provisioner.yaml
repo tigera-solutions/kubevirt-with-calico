@@ -2,11 +2,12 @@
 - hosts: masters
   become: false
   vars:
-    ce_version: "v3.18.2"
+    ce_version: "v3.20.1"
     networking: aks-calico-cni # acceptable values: aks-azure-cni, aks-calico-cni, eks, eks-calico-cni, none
     cluster_type: kubeadm #acceptable values: aks, eks, kubeadm
     #network_mode: VXLAN #acceptable values: VXLAN, VXLANCrossSubnet, IPIP, IPIPCrossSubnet, None
-    storage_type: classic #acceptable values: classic, csi
+    # storage_type: classic #acceptable values: classic, csi
+    storage_type: csi
     pod_cidr: "10.244.0.0/16"
   tasks:
 
@@ -65,13 +66,14 @@
     - { src: './license.yaml', dest: '$HOME/calico/' }
     - { src: './pull-secret.json', dest: '$HOME/calico/' }
     - { src: '../configs/storageClass.yaml', dest: '$HOME/calico/storageClass.yaml' }
-    # - { src: '../configs/storageClass.csi.yaml', dest: '$HOME/calico/storageClass.yaml' }
+    - { src: '../configs/storageClass.csi.yaml', dest: '$HOME/calico/storageClass.csi.yaml' }
     - { src: './azure-cloud.conf', dest: '$HOME/calico/azure-cloud.conf' }
     - { src: '../configs/pv-instances.yaml', dest: '$HOME/calico/pv-instances.yaml' }
 
   - name: Configure Azure Disk CSI driver [required since K8s v1.23]
     shell: |
-      curl -skSL https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/v1.28.6/deploy/install-driver.sh | bash -s v1.28.6 snapshot --
+      curl -skSL https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/v1.31.5/deploy/install-driver.sh | bash -s v1.31.5 snapshot --
+      #curl -skSL https://raw.githubusercontent.com/kubernetes-sigs/azuredisk-csi-driver/v1.28.6/deploy/install-driver.sh | bash -s v1.28.6 snapshot --
     when: storage_type == 'csi'
 
   - name: Get azure-cloud.conf as encoded base64 string
@@ -111,11 +113,21 @@
     command: kubectl get sc -ojsonpath='{.items[?(@.metadata.name=="tigera-elasticsearch")].metadata.name}'
     register: sc_tigera_name
 
-  - name: Configure storageClass for Calico Enterprise
+  - name: Configure classic storageClass for Calico Enterprise
     shell: |
       kubectl create -f $HOME/calico/storageClass.yaml
       
-    when: sc_tigera_name.stdout != 'tigera-elasticsearch'
+    when:
+    - storage_type == 'classic'
+    - sc_tigera_name.stdout != 'tigera-elasticsearch'
+
+  - name: Configure CSI storageClass for Calico Enterprise
+    shell: |
+      kubectl create -f $HOME/calico/storageClass.csi.yaml
+      
+    when:
+    - storage_type == 'csi'
+    - sc_tigera_name.stdout != 'tigera-elasticsearch'
 
   - name: Get PV configuraiton
     command: kubectl get pv -ojsonpath='{.items[?(@.spec.storageClassName=="tigera-elasticsearch")].metadata.name}'
@@ -153,10 +165,11 @@
       kubectl create secret generic tigera-pull-secret \
       --type=kubernetes.io/dockerconfigjson -n tigera-operator \
       --from-file=.dockerconfigjson=$HOME/calico/pull-secret.json
-      kubectl create secret generic tigera-pull-secret \
+      # these commands no longer needed
+      # kubectl create secret generic tigera-pull-secret \
       --type=kubernetes.io/dockerconfigjson -n tigera-prometheus \
       --from-file=.dockerconfigjson=$HOME/calico/pull-secret.json
-      kubectl patch deployment -n tigera-prometheus calico-prometheus-operator \
+      # kubectl patch deployment -n tigera-prometheus calico-prometheus-operator \
       -p '{"spec":{"template":{"spec":{"imagePullSecrets":[{"name": "tigera-pull-secret"}]}}}}'
     when: tigera_secrets_exist.stdout != 'tigera-pull-secret'
 
@@ -180,7 +193,7 @@
   - name: Wait for Tigear APIServer to become available
     command: |
       kubectl get tigerastatus apiserver -ojsonpath='{.status.conditions[?(@.type=="Available")].status}'
-    retries: 10
+    retries: 15
     delay: 30
     register: tigera_apiserver_status
     until: tigera_apiserver_status.stdout.find("True") != -1
